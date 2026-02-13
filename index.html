@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Baca — Indonesian Reader</title>
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #f8f7f4;
+  --card-bg: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #6b6b6b;
+  --accent: #2d6a4f;
+  --accent-light: #d8f3dc;
+  --border: #e8e6e1;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --radius: 12px;
+  --sheet-bg: #ffffff;
+  --overlay: rgba(0,0,0,0.3);
+  --word-highlight: #d8f3dc;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* ── Header ── */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header h1 {
+  font-size: 18px;
+  font-weight: 700;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.back-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.back-btn.visible {
+  display: block;
+}
+
+/* ── Story List ── */
+.story-list {
+  padding: 12px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.story-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.story-card:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.story-card h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.story-card p {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* ── Story Reader ── */
+.story-reader {
+  display: none;
+  padding: 16px 16px 120px;
+}
+
+.story-reader .story-text {
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+.story-reader .story-text p {
+  margin-bottom: 16px;
+}
+
+.story-heading {
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+h1.story-heading {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+h3.story-heading {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.word {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 2px;
+  margin: 0 -2px;
+  transition: background 0.15s ease;
+}
+
+.word:active, .word.active {
+  background: var(--word-highlight);
+}
+
+.punct {
+  cursor: default;
+}
+
+/* ── Bottom Sheet ── */
+.sheet-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sheet-overlay.visible {
+  display: block;
+  opacity: 1;
+}
+
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--sheet-bg);
+  border-radius: 16px 16px 0 0;
+  padding: 12px 20px calc(20px + env(safe-area-inset-bottom));
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+  max-height: 40vh;
+}
+
+.bottom-sheet.open {
+  transform: translateY(0);
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+  margin: 0 auto 14px;
+}
+
+.sheet-word {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.sheet-stem {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.sheet-translation {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.sheet-not-found {
+  font-size: 15px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Loading / empty states ── */
+.loading, .empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" id="backBtn" aria-label="Back">&larr;</button>
+  <h1 id="headerTitle">Baca</h1>
+</div>
+
+<div id="listView" class="story-list">
+  <div class="loading">Loading stories...</div>
+</div>
+
+<div id="readerView" class="story-reader">
+  <div class="story-text" id="storyText"></div>
+</div>
+
+<div class="sheet-overlay" id="sheetOverlay"></div>
+<div class="bottom-sheet" id="bottomSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-word" id="sheetWord"></div>
+  <div class="sheet-stem" id="sheetStem"></div>
+  <div class="sheet-translation" id="sheetTranslation"></div>
+</div>
+
+<script>
+// ── State ──
+let dictionary = {};
+let stories = [];
+let currentView = 'list'; // 'list' | 'reader'
+let activeWord = null;
+
+// ── DOM refs ──
+const listView = document.getElementById('listView');
+const readerView = document.getElementById('readerView');
+const storyText = document.getElementById('storyText');
+const backBtn = document.getElementById('backBtn');
+const headerTitle = document.getElementById('headerTitle');
+const bottomSheet = document.getElementById('bottomSheet');
+const sheetOverlay = document.getElementById('sheetOverlay');
+const sheetWord = document.getElementById('sheetWord');
+const sheetStem = document.getElementById('sheetStem');
+const sheetTranslation = document.getElementById('sheetTranslation');
+
+// ── Indonesian Stemmer ──
+// Strips common affixes to find root form in dictionary.
+function stemWord(word) {
+  const lower = word.toLowerCase();
+  const candidates = [lower];
+
+  // Suffix patterns to strip
+  const suffixes = ['-nya', 'nya', 'kah', 'lah', 'kan', 'an', 'i'];
+  // Prefix patterns to strip (order matters — longer first)
+  const prefixes = [
+    'meny', 'meng', 'mem', 'men', 'me',
+    'peny', 'peng', 'pem', 'pen', 'pe',
+    'ber', 'bel',
+    'ter',
+    'di',
+    'se',
+    'ke'
+  ];
+
+  // Nasalization restoration: when prefix is stripped, the root may start differently
+  const nasalMap = {
+    'meny': ['s', 'ny'],
+    'men': ['t', 'n'],
+    'mem': ['p', 'm'],
+    'meng': ['k', 'g', 'ng', ''],
+    'me': [''],
+    'peny': ['s', 'ny'],
+    'pen': ['t', 'n'],
+    'pem': ['p', 'm'],
+    'peng': ['k', 'g', 'ng', ''],
+    'pe': [''],
+  };
+
+  // Try stripping suffixes
+  for (const suf of suffixes) {
+    if (lower.endsWith(suf) && lower.length > suf.length + 2) {
+      candidates.push(lower.slice(0, -suf.length));
+    }
+  }
+
+  // Try stripping prefixes
+  const bases = [...candidates];
+  for (const base of bases) {
+    for (const pre of prefixes) {
+      if (base.startsWith(pre) && base.length > pre.length + 2) {
+        const stripped = base.slice(pre.length);
+        candidates.push(stripped);
+
+        // Try nasal restoration
+        const restores = nasalMap[pre];
+        if (restores) {
+          for (const r of restores) {
+            if (r === '') continue;
+            candidates.push(r + stripped);
+          }
+        }
+      }
+    }
+  }
+
+  // Try stripping both prefix and suffix combinations
+  for (const pre of prefixes) {
+    if (!lower.startsWith(pre)) continue;
+    const afterPre = lower.slice(pre.length);
+    if (afterPre.length < 3) continue;
+
+    for (const suf of suffixes) {
+      if (!afterPre.endsWith(suf)) continue;
+      const root = afterPre.slice(0, -suf.length);
+      if (root.length < 2) continue;
+      candidates.push(root);
+
+      const restores = nasalMap[pre];
+      if (restores) {
+        for (const r of restores) {
+          if (r === '') continue;
+          candidates.push(r + root);
+        }
+      }
+    }
+  }
+
+  return [...new Set(candidates)];
+}
+
+function lookupWord(word) {
+  // Clean the word: lowercase, strip punctuation from edges
+  const clean = word.toLowerCase().replace(/^[^a-zA-Z\u00C0-\u024F]+|[^a-zA-Z\u00C0-\u024F]+$/g, '');
+  if (!clean) return null;
+
+  // Check if the original word looks like a proper noun (capitalized)
+  const isCapitalized = /^[A-Z]/.test(word.trim());
+  // Preserve original form for display
+  const display = word.trim().replace(/^[^a-zA-Z\u00C0-\u024F]+|[^a-zA-Z\u00C0-\u024F]+$/g, '');
+
+  // Direct match
+  if (dictionary[clean]) {
+    return { word: clean, display, stem: null, translation: dictionary[clean] };
+  }
+
+  // Stemmed match
+  const candidates = stemWord(clean);
+  for (const c of candidates) {
+    if (c !== clean && dictionary[c]) {
+      return { word: clean, display, stem: c, translation: dictionary[c] };
+    }
+  }
+
+  return { word: clean, display, stem: null, translation: null, isName: isCapitalized };
+}
+
+// ── Rendering ──
+function renderStoryList() {
+  if (stories.length === 0) {
+    listView.innerHTML = '<div class="empty">No stories found.</div>';
+    return;
+  }
+
+  listView.innerHTML = stories.map(s => `
+    <div class="story-card" data-id="${s.id}">
+      <h2>${s.title}</h2>
+      <p>${s.description}</p>
+    </div>
+  `).join('');
+
+  listView.querySelectorAll('.story-card').forEach(card => {
+    card.addEventListener('click', () => openStory(card.dataset.id));
+  });
+}
+
+function wrapWordsInLine(line) {
+  // Split line into tokens: words and non-word characters
+  const tokens = line.split(/(\s+|(?=[.,!?;:"""''()\[\]{}\-—])|(?<=[.,!?;:"""''()\[\]{}\-—]))/);
+
+  return tokens.map(token => {
+    if (!token) return '';
+    // Whitespace
+    if (/^\s+$/.test(token)) return token;
+    // Pure punctuation
+    if (/^[.,!?;:"""''()\[\]{}\-—]+$/.test(token)) return `<span class="punct">${token}</span>`;
+    // Word
+    return `<span class="word">${token}</span>`;
+  }).join('');
+}
+
+function textToClickableHTML(text) {
+  // Split into paragraphs (double newline separated)
+  const paragraphs = text.trim().split(/\n\s*\n/);
+
+  return paragraphs.map(para => {
+    const trimmed = para.trim();
+
+    // Markdown headers
+    const headerMatch = trimmed.match(/^(#{1,6})\s+(.*)/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const tag = `h${level}`;
+      return `<${tag} class="story-heading">${wrapWordsInLine(headerMatch[2])}</${tag}>`;
+    }
+
+    return `<p>${wrapWordsInLine(trimmed)}</p>`;
+  }).join('');
+}
+
+// ── Navigation ──
+function showView(view) {
+  currentView = view;
+  closeSheet();
+
+  if (view === 'list') {
+    listView.style.display = '';
+    readerView.style.display = 'none';
+    backBtn.classList.remove('visible');
+    headerTitle.textContent = 'Baca';
+  } else {
+    listView.style.display = 'none';
+    readerView.style.display = 'block';
+    backBtn.classList.add('visible');
+  }
+}
+
+async function openStory(id) {
+  const story = stories.find(s => s.id === id);
+  if (!story) return;
+
+  headerTitle.textContent = story.title;
+  showView('reader');
+  storyText.innerHTML = '<div class="loading">Loading...</div>';
+  history.pushState({ view: 'reader', id }, '', `#${id}`);
+
+  try {
+    const res = await fetch(`stories/${id}.md`);
+    if (!res.ok) throw new Error('Story not found');
+    const text = await res.text();
+    storyText.innerHTML = textToClickableHTML(text);
+    attachWordListeners();
+  } catch (e) {
+    storyText.innerHTML = `<div class="empty">Could not load story.</div>`;
+  }
+}
+
+function attachWordListeners() {
+  storyText.querySelectorAll('.word').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (activeWord) activeWord.classList.remove('active');
+      el.classList.add('active');
+      activeWord = el;
+      showTranslation(el.textContent);
+    });
+  });
+}
+
+// ── Bottom Sheet ──
+function showTranslation(word) {
+  const result = lookupWord(word);
+  if (!result) return;
+
+  sheetWord.textContent = result.display || result.word;
+
+  if (result.stem && result.stem !== result.word) {
+    sheetStem.textContent = `root: ${result.stem}`;
+    sheetStem.style.display = '';
+  } else {
+    sheetStem.style.display = 'none';
+  }
+
+  if (result.translation) {
+    sheetTranslation.textContent = result.translation;
+    sheetTranslation.className = 'sheet-translation';
+  } else if (result.isName) {
+    sheetTranslation.textContent = 'Proper noun / name';
+    sheetTranslation.className = 'sheet-not-found';
+  } else {
+    sheetTranslation.textContent = 'Not in dictionary';
+    sheetTranslation.className = 'sheet-not-found';
+  }
+
+  sheetOverlay.classList.add('visible');
+  bottomSheet.classList.add('open');
+}
+
+function closeSheet() {
+  bottomSheet.classList.remove('open');
+  sheetOverlay.classList.remove('visible');
+  if (activeWord) {
+    activeWord.classList.remove('active');
+    activeWord = null;
+  }
+}
+
+sheetOverlay.addEventListener('click', closeSheet);
+
+// ── Back button / browser history ──
+backBtn.addEventListener('click', () => {
+  history.back();
+});
+
+window.addEventListener('popstate', (e) => {
+  if (e.state && e.state.view === 'reader' && e.state.id) {
+    openStory(e.state.id);
+  } else {
+    showView('list');
+  }
+});
+
+// ── Init ──
+async function init() {
+  try {
+    const [dictRes, storiesRes] = await Promise.all([
+      fetch('dictionary.json'),
+      fetch('stories/stories.json')
+    ]);
+
+    if (!dictRes.ok) throw new Error('Could not load dictionary');
+    if (!storiesRes.ok) throw new Error('Could not load stories index');
+
+    dictionary = await dictRes.json();
+    stories = await storiesRes.json();
+
+    renderStoryList();
+
+    // Set initial history state for the list view
+    history.replaceState({ view: 'list' }, '', location.pathname);
+
+    // Handle direct link to a story
+    if (location.hash) {
+      const id = location.hash.slice(1);
+      if (stories.find(s => s.id === id)) {
+        openStory(id);
+      }
+    }
+  } catch (e) {
+    listView.innerHTML = `<div class="empty">Error loading app: ${e.message}</div>`;
+    console.error(e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
